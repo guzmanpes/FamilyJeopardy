@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Family Jeopardy – Two Media Fields</title>
+<title>Family Jeopardy – YouTube Clip Times</title>
 <style>
   :root{
     --blue:#071e8f;
@@ -289,13 +289,37 @@
     .editor-top{grid-template-columns:1fr}
     .media-controls{grid-template-columns:1fr}
   }
+
+  .clip-time-controls{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:7px;
+    margin-top:7px;
+  }
+  .clip-time-field label{
+    display:block;
+    font-size:.72rem;
+    font-weight:900;
+    color:#4d5674;
+    margin-bottom:3px;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+  }
+  .clip-time-controls[hidden]{display:none}
+  .clip-description{
+    margin-top:5px;
+    font-size:.75rem;
+    color:#4d5674;
+    line-height:1.3;
+  }
+
 </style>
 </head>
 <body>
   <div class="topbar">
     <div>
       <h1 id="gameTitle">Family Jeopardy</h1>
-      <div class="subtitle">Optional media → question → optional media → text answer</div>
+      <div class="subtitle">Optional media → question → optional media → text answer, with YouTube start/end times</div>
     </div>
     <div class="controls">
       <button class="btn-secondary" id="fullscreenBtn">Full Screen</button>
@@ -353,6 +377,9 @@
         Both media fields are optional, so a clue can also be question → answer, media → question → answer,
         or question → media → answer.<br><br>
         Supported media: YouTube, MP4 video, MP3 audio, and images.
+        When Video is selected, optional <strong>Start</strong> and <strong>End</strong> fields appear.
+        Enter seconds such as <code>83</code>, or time formats such as <code>1:23</code> and <code>1:40</code>.
+        A timestamp already included in a YouTube link is also recognized.<br><br>
         For files uploaded to GitHub, use paths such as <code>media/intro.mp3</code>,
         <code>media/clip.mp4</code>, or <code>media/photo.jpg</code>.
       </div>
@@ -369,7 +396,8 @@
   const VALUES = [100,200,300,400,500];
   const DEFAULT_CATEGORIES = ["Rylan","Morgan","Lindsey","Rob","Jessica","Gabe"];
 
-  const DATA_KEY = "familyJeopardyDualMediaDataV5";
+  const DATA_KEY = "familyJeopardyYouTubeClipsDataV6";
+  const V5_KEY = "familyJeopardyDualMediaDataV5";
   const V4_KEY = "familyJeopardyOptionalMediaDataV4";
   const V3_KEY = "familyJeopardyQuestionMediaDataV3";
   const V2_KEY = "familyJeopardyMediaDataV2";
@@ -387,9 +415,13 @@
           value,
           introMediaType:"none",
           introMediaSource:"",
+          introMediaStart:"",
+          introMediaEnd:"",
           questionText:`Enter the ${name} $${value} question here.`,
           followMediaType:"none",
           followMediaSource:"",
+          followMediaStart:"",
+          followMediaEnd:"",
           answerText:`Enter the ${name} $${value} answer here.`
         }))
       }))
@@ -403,9 +435,13 @@
   function normalizeClue(clue, clueIndex){
     let introMediaType = safeMediaType(clue.introMediaType);
     let introMediaSource = clue.introMediaSource ?? "";
+    let introMediaStart = clue.introMediaStart ?? "";
+    let introMediaEnd = clue.introMediaEnd ?? "";
     let questionText = clue.questionText;
     let followMediaType = safeMediaType(clue.followMediaType);
     let followMediaSource = clue.followMediaSource ?? "";
+    let followMediaStart = clue.followMediaStart ?? "";
+    let followMediaEnd = clue.followMediaEnd ?? "";
     let answerText = clue.answerText;
 
     // Migrate V4: its single media field came after the question.
@@ -448,9 +484,13 @@
       value:VALUES[clueIndex],
       introMediaType,
       introMediaSource:String(introMediaSource ?? ""),
+      introMediaStart:String(introMediaStart ?? ""),
+      introMediaEnd:String(introMediaEnd ?? ""),
       questionText:String(questionText ?? ""),
       followMediaType,
       followMediaSource:String(followMediaSource ?? ""),
+      followMediaStart:String(followMediaStart ?? ""),
+      followMediaEnd:String(followMediaEnd ?? ""),
       answerText:String(answerText ?? "")
     };
   }
@@ -475,7 +515,7 @@
   }
 
   function loadData(){
-    for(const key of [DATA_KEY,V4_KEY,V3_KEY,V2_KEY,V1_KEY]){
+    for(const key of [DATA_KEY,V5_KEY,V4_KEY,V3_KEY,V2_KEY,V1_KEY]){
       try{
         const saved = localStorage.getItem(key);
         if(saved) return validateData(JSON.parse(saved));
@@ -561,26 +601,83 @@
     status.textContent = `${playedCount} of 30 questions played`;
   }
 
-  function youtubeEmbedUrl(source){
+  function parseTimeToSeconds(value){
+    const text = String(value ?? "").trim().toLowerCase();
+    if(!text) return null;
+
+    if(/^\d+(?:\.\d+)?$/.test(text)){
+      return Math.max(0,Math.floor(Number(text)));
+    }
+
+    if(text.includes(":")){
+      const parts = text.split(":").map(part => Number(part));
+      if(parts.every(Number.isFinite)){
+        if(parts.length === 2){
+          return Math.max(0,Math.floor(parts[0] * 60 + parts[1]));
+        }
+        if(parts.length === 3){
+          return Math.max(0,Math.floor(parts[0] * 3600 + parts[1] * 60 + parts[2]));
+        }
+      }
+    }
+
+    let total = 0;
+    let matched = false;
+    const hours = text.match(/(\d+(?:\.\d+)?)h/);
+    const minutes = text.match(/(\d+(?:\.\d+)?)m/);
+    const seconds = text.match(/(\d+(?:\.\d+)?)s/);
+
+    if(hours){ total += Number(hours[1]) * 3600; matched = true; }
+    if(minutes){ total += Number(minutes[1]) * 60; matched = true; }
+    if(seconds){ total += Number(seconds[1]); matched = true; }
+
+    return matched ? Math.max(0,Math.floor(total)) : null;
+  }
+
+  function youtubeEmbedUrl(source,startValue,endValue){
     try{
       const url = new URL(source,window.location.href);
+      let videoId = null;
 
       if(url.hostname.includes("youtu.be")){
-        const id = url.pathname.split("/").filter(Boolean)[0];
-        return id ? `https://www.youtube.com/embed/${id}` : null;
-      }
-
-      if(url.hostname.includes("youtube.com")){
+        videoId = url.pathname.split("/").filter(Boolean)[0] || null;
+      }else if(url.hostname.includes("youtube.com")){
         if(url.pathname === "/watch"){
-          const id = url.searchParams.get("v");
-          return id ? `https://www.youtube.com/embed/${id}` : null;
-        }
-
-        const parts = url.pathname.split("/").filter(Boolean);
-        if(["embed","shorts","live"].includes(parts[0]) && parts[1]){
-          return `https://www.youtube.com/embed/${parts[1]}`;
+          videoId = url.searchParams.get("v");
+        }else{
+          const parts = url.pathname.split("/").filter(Boolean);
+          if(["embed","shorts","live"].includes(parts[0]) && parts[1]){
+            videoId = parts[1];
+          }
         }
       }
+
+      if(!videoId) return null;
+
+      const linkStart =
+        parseTimeToSeconds(url.searchParams.get("start")) ??
+        parseTimeToSeconds(url.searchParams.get("t"));
+      const linkEnd = parseTimeToSeconds(url.searchParams.get("end"));
+
+      const start =
+        parseTimeToSeconds(startValue) ??
+        linkStart;
+      const end =
+        parseTimeToSeconds(endValue) ??
+        linkEnd;
+
+      const params = new URLSearchParams();
+      params.set("rel","0");
+
+      if(start !== null){
+        params.set("start",String(start));
+      }
+
+      if(end !== null && (start === null || end > start)){
+        params.set("end",String(end));
+      }
+
+      return `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
     }catch(error){}
 
     return null;
@@ -601,7 +698,7 @@
     questionContent.innerHTML = "";
   }
 
-  function makeMediaSection(type,source,labelText){
+  function makeMediaSection(type,source,labelText,startValue,endValue){
     if(type === "none" || !source.trim()) return null;
 
     const section = document.createElement("div");
@@ -615,11 +712,11 @@
     const cleanSource = source.trim();
 
     if(type === "video"){
-      const youtube = youtubeEmbedUrl(cleanSource);
+      const youtube = youtubeEmbedUrl(cleanSource,startValue,endValue);
 
       if(youtube){
         const frame = document.createElement("iframe");
-        frame.src = youtube + "?rel=0";
+        frame.src = youtube;
         frame.title = labelText;
         frame.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
         frame.allowFullscreen = true;
@@ -661,7 +758,9 @@
     const intro = makeMediaSection(
       clue.introMediaType,
       clue.introMediaSource,
-      "Media Before Question"
+      "Media Before Question",
+      clue.introMediaStart,
+      clue.introMediaEnd
     );
     if(intro) questionContent.appendChild(intro);
 
@@ -678,7 +777,9 @@
     const follow = makeMediaSection(
       clue.followMediaType,
       clue.followMediaSource,
-      "Media After Question"
+      "Media After Question",
+      clue.followMediaStart,
+      clue.followMediaEnd
     );
     if(follow) questionContent.appendChild(follow);
   }
@@ -784,9 +885,13 @@
 
       clue.introMediaType = byId(`intro-type-${clueIndex}`).value;
       clue.introMediaSource = byId(`intro-source-${clueIndex}`).value;
+      clue.introMediaStart = byId(`intro-start-${clueIndex}`).value;
+      clue.introMediaEnd = byId(`intro-end-${clueIndex}`).value;
       clue.questionText = byId(`question-${clueIndex}`).value;
       clue.followMediaType = byId(`follow-type-${clueIndex}`).value;
       clue.followMediaSource = byId(`follow-source-${clueIndex}`).value;
+      clue.followMediaStart = byId(`follow-start-${clueIndex}`).value;
+      clue.followMediaEnd = byId(`follow-end-${clueIndex}`).value;
       clue.answerText = byId(`answer-${clueIndex}`).value;
     });
   }
@@ -798,7 +903,15 @@
     return "No media needed";
   }
 
-  function buildMediaEditor(prefix,clueIndex,typeValue,sourceValue,helpText){
+  function buildMediaEditor(
+    prefix,
+    clueIndex,
+    typeValue,
+    sourceValue,
+    startValue,
+    endValue,
+    helpText
+  ){
     const wrapper = document.createElement("div");
     wrapper.className = prefix === "intro" ? "intro-cell" : "follow-cell";
 
@@ -831,20 +944,63 @@
     controls.append(type,source);
     wrapper.appendChild(controls);
 
+    const clipControls = document.createElement("div");
+    clipControls.className = "clip-time-controls";
+
+    const startWrap = document.createElement("div");
+    startWrap.className = "clip-time-field";
+    const startLabel = document.createElement("label");
+    startLabel.htmlFor = `${prefix}-start-${clueIndex}`;
+    startLabel.textContent = "Start time";
+    const start = document.createElement("input");
+    start.type = "text";
+    start.id = `${prefix}-start-${clueIndex}`;
+    start.value = startValue;
+    start.placeholder = "Example: 1:23";
+    startWrap.append(startLabel,start);
+
+    const endWrap = document.createElement("div");
+    endWrap.className = "clip-time-field";
+    const endLabel = document.createElement("label");
+    endLabel.htmlFor = `${prefix}-end-${clueIndex}`;
+    endLabel.textContent = "End time";
+    const end = document.createElement("input");
+    end.type = "text";
+    end.id = `${prefix}-end-${clueIndex}`;
+    end.value = endValue;
+    end.placeholder = "Example: 1:40";
+    endWrap.append(endLabel,end);
+
+    clipControls.append(startWrap,endWrap);
+    wrapper.appendChild(clipControls);
+
+    const clipDescription = document.createElement("div");
+    clipDescription.className = "clip-description";
+    clipDescription.textContent =
+      "YouTube only. Use seconds, M:SS, or H:MM:SS. Leave blank to use the full video or a timestamp already in the link.";
+    wrapper.appendChild(clipDescription);
+
     const help = document.createElement("div");
     help.className = "editor-help";
-    help.textContent = typeValue === "none"
-      ? "This stage will be skipped."
-      : helpText;
     wrapper.appendChild(help);
 
-    type.addEventListener("change",() => {
-      source.disabled = type.value === "none";
+    function refreshMediaFields(){
+      const noMedia = type.value === "none";
+      const isVideo = type.value === "video";
+
+      source.disabled = noMedia;
       source.placeholder = mediaPlaceholder(type.value);
-      help.textContent = type.value === "none"
+      clipControls.hidden = !isVideo;
+      clipDescription.hidden = !isVideo;
+      start.disabled = !isVideo;
+      end.disabled = !isVideo;
+      help.textContent = noMedia
         ? "This stage will be skipped."
         : helpText;
-    });
+    }
+
+    type.addEventListener("change",refreshMediaFields);
+    refreshMediaFields();
 
     return wrapper;
   }
@@ -886,6 +1042,8 @@
         clueIndex,
         clue.introMediaType,
         clue.introMediaSource,
+        clue.introMediaStart,
+        clue.introMediaEnd,
         "This media appears before the written question."
       );
 
@@ -908,6 +1066,8 @@
         clueIndex,
         clue.followMediaType,
         clue.followMediaSource,
+        clue.followMediaStart,
+        clue.followMediaEnd,
         "This media appears after the written question."
       );
 
@@ -948,7 +1108,7 @@
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "family-jeopardy-dual-media-data.json";
+    link.download = "family-jeopardy-youtube-clips-data.json";
     link.click();
     URL.revokeObjectURL(url);
   });
