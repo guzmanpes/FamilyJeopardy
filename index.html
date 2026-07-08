@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Family Jeopardy – Two Media Fields</title>
+<style>
+  :root{
+    --blue:#071e8f;
+    --blue2:#0b2fc4;
+    --gold:#ffd84d;
+    --white:#fff;
+    --ink:#07135f;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    min-height:100vh;
+    font-family:Arial,Helvetica,sans-serif;
+    background:radial-gradient(circle at top,#163bd0 0%,#07135f 45%,#03071f 100%);
+    color:var(--white);
+  }
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:14px 18px;
+    background:rgba(2,6,38,.93);
+    border-bottom:2px solid rgba(255,255,255,.2);
+    position:sticky;
+    top:0;
+    z-index:10;
+  }
+  h1{
+    margin:0;
+    font-size:clamp(1.35rem,4vw,2.5rem);
+    text-transform:uppercase;
+    text-shadow:0 3px 0 #000;
+  }
+  .subtitle{margin-top:4px;font-size:.87rem;opacity:.83}
+  .controls{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+  button,.file-label{
+    border:0;
+    border-radius:9px;
+    padding:10px 13px;
+    font-weight:700;
+    cursor:pointer;
+    font-size:.9rem;
+  }
+  button:hover,.file-label:hover{filter:brightness(1.08)}
+  .btn-primary{background:var(--gold);color:#111}
+  .btn-secondary{background:#dce5ff;color:var(--ink)}
+  .btn-danger{background:#ff6b6b;color:#240000}
+  .file-label{display:inline-flex;align-items:center;background:#dce5ff;color:var(--ink)}
+  .file-label input{display:none}
+
+  .board-shell{width:100%;overflow-x:auto;padding:18px}
+  .board{
+    min-width:900px;
+    max-width:1500px;
+    margin:0 auto;
+    display:grid;
+    grid-template-columns:repeat(6,1fr);
+    gap:8px;
+  }
+  .category{
+    min-height:96px;
+    background:linear-gradient(180deg,var(--blue2),var(--blue));
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:12px 8px;
+    border:3px solid #02082f;
+    font-size:clamp(1rem,2vw,1.55rem);
+    font-weight:900;
+    text-transform:uppercase;
+    word-break:break-word;
+    text-shadow:0 3px 0 #000;
+  }
+  .tile{
+    min-height:105px;
+    background:linear-gradient(180deg,#1238cc,#061b86);
+    color:var(--gold);
+    border:3px solid #02082f;
+    border-radius:0;
+    font-size:clamp(2rem,4vw,3.25rem);
+    font-weight:900;
+    text-shadow:0 4px 0 #000;
+    transition:transform .08s ease,filter .15s ease;
+  }
+  .tile:hover:not(:disabled){transform:scale(1.02);filter:brightness(1.15)}
+  .tile.played{
+    background:linear-gradient(180deg,#29365e,#151d3b);
+    color:#7580a8;
+    text-shadow:none;
+    cursor:not-allowed;
+  }
+  .tile.played::after{
+    content:"✓ PLAYED";
+    font-size:1rem;
+    letter-spacing:.08em;
+    color:#b8c1e3;
+  }
+  .tile.played .money{display:none}
+  .status{text-align:center;padding:0 18px 22px;font-weight:700;color:#e6eaff}
+
+  .modal{
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:100;
+    background:rgba(0,0,0,.92);
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+  }
+  .modal.open{display:flex}
+  .question-card{
+    width:min(1120px,96vw);
+    min-height:min(700px,92vh);
+    max-height:94vh;
+    overflow:auto;
+    background:linear-gradient(180deg,#0d31c1,#071567);
+    border:5px solid #e7ecff;
+    box-shadow:0 0 50px rgba(65,103,255,.45);
+    display:flex;
+    flex-direction:column;
+    padding:clamp(22px,4vw,52px);
+    text-align:center;
+  }
+  .question-meta{
+    color:var(--gold);
+    font-size:clamp(1.1rem,2.3vw,1.8rem);
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.05em;
+  }
+  .question-content{
+    display:flex;
+    flex:1;
+    flex-direction:column;
+    justify-content:center;
+    width:100%;
+    padding:20px 0;
+  }
+  .section-label{
+    color:var(--gold);
+    font-size:.82rem;
+    font-weight:900;
+    letter-spacing:.13em;
+    text-transform:uppercase;
+    margin-bottom:8px;
+  }
+  .question-copy{
+    font-size:clamp(1.7rem,4.2vw,3.9rem);
+    line-height:1.16;
+    font-weight:800;
+    text-shadow:0 4px 0 #000;
+    white-space:pre-wrap;
+    overflow-wrap:anywhere;
+    margin:6px auto 22px;
+  }
+  .media-section{
+    width:min(900px,100%);
+    margin:14px auto 22px;
+    padding:16px;
+    background:rgba(255,255,255,.1);
+    border:1px solid rgba(255,255,255,.28);
+    border-radius:12px;
+  }
+  .media-section video,
+  .media-section iframe{
+    display:block;
+    width:100%;
+    max-height:48vh;
+    aspect-ratio:16/9;
+    border:0;
+    background:#000;
+    border-radius:7px;
+  }
+  .media-section audio{display:block;width:min(760px,100%);margin:0 auto}
+  .media-section img{
+    display:block;
+    max-width:100%;
+    max-height:48vh;
+    object-fit:contain;
+    margin:0 auto;
+    border-radius:7px;
+  }
+  .media-note{margin-top:9px;font-size:.86rem;font-weight:700;opacity:.82}
+  .answer-box{
+    display:none;
+    margin:8px auto 22px;
+    padding:18px;
+    width:min(900px,100%);
+    background:rgba(255,255,255,.12);
+    border:2px solid var(--gold);
+    border-radius:10px;
+  }
+  .answer-box.show{display:block}
+  .answer-copy{
+    font-size:clamp(1.35rem,3vw,2.3rem);
+    font-weight:800;
+    white-space:pre-wrap;
+  }
+  .modal-actions{display:flex;justify-content:center;flex-wrap:wrap;gap:10px;margin-top:auto}
+
+  .editor-panel{
+    width:min(1450px,99vw);
+    max-height:95vh;
+    overflow:auto;
+    background:#f4f6ff;
+    color:#111;
+    border-radius:14px;
+    padding:22px;
+  }
+  .editor-panel h2{margin-top:0}
+  .editor-top{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin-bottom:16px;
+  }
+  .field label{display:block;font-weight:800;margin-bottom:5px}
+  input[type="text"],textarea,select{
+    width:100%;
+    border:1px solid #9aa6d1;
+    border-radius:8px;
+    padding:10px;
+    font:inherit;
+    background:#fff;
+  }
+  textarea{min-height:92px;resize:vertical}
+  .tabs{display:flex;gap:7px;overflow-x:auto;padding-bottom:9px;margin-bottom:12px}
+  .tab{background:#dfe5ff;color:var(--ink);white-space:nowrap}
+  .tab.active{background:#0a2bb0;color:#fff}
+  .editor-grid{
+    display:grid;
+    grid-template-columns:70px 1.1fr 1.2fr 1.1fr 1fr;
+    gap:9px;
+    align-items:start;
+  }
+  .editor-grid .head{font-weight:900;text-align:center}
+  .value-label{font-weight:900;color:#0a2bb0;padding-top:11px;text-align:center}
+  .media-controls{display:grid;grid-template-columns:135px 1fr;gap:7px}
+  .editor-help{
+    font-size:.78rem;
+    color:#4d5674;
+    margin-top:5px;
+    line-height:1.35;
+  }
+  .help{
+    margin-top:14px;
+    padding:12px;
+    background:#e8edff;
+    border-left:5px solid #0a2bb0;
+    font-size:.9rem;
+    line-height:1.5;
+  }
+  code{background:#dfe5ff;padding:2px 5px;border-radius:4px}
+  .editor-actions{
+    position:sticky;
+    bottom:-22px;
+    background:#f4f6ff;
+    padding:14px 0 0;
+    margin-top:18px;
+    display:flex;
+    justify-content:flex-end;
+    flex-wrap:wrap;
+    gap:8px;
+    border-top:1px solid #ccd2e8;
+  }
+
+  @media(max-width:1000px){
+    .editor-grid{grid-template-columns:70px 1fr}
+    .editor-grid .head{display:none}
+    .value-label{grid-column:1}
+    .intro-cell,.question-cell,.follow-cell,.answer-cell{grid-column:2}
+    .intro-cell::before{content:"Media before question";display:block;font-weight:800;margin-bottom:4px}
+    .question-cell::before{content:"Question text";display:block;font-weight:800;margin-bottom:4px}
+    .follow-cell::before{content:"Media after question";display:block;font-weight:800;margin-bottom:4px}
+    .answer-cell::before{content:"Text answer";display:block;font-weight:800;margin-bottom:4px}
+  }
+  @media(max-width:700px){
+    .topbar{align-items:flex-start;flex-direction:column}
+    .controls{justify-content:flex-start}
+    .editor-top{grid-template-columns:1fr}
+    .media-controls{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div>
+      <h1 id="gameTitle">Family Jeopardy</h1>
+      <div class="subtitle">Optional media → question → optional media → text answer</div>
+    </div>
+    <div class="controls">
+      <button class="btn-secondary" id="fullscreenBtn">Full Screen</button>
+      <button class="btn-secondary" id="editBtn">Edit Questions</button>
+      <button class="btn-secondary" id="exportBtn">Export Game Data</button>
+      <label class="file-label">Import Game Data<input id="importFile" type="file" accept=".json,application/json"></label>
+      <button class="btn-danger" id="resetBtn">Reset Played Tiles</button>
+    </div>
+  </div>
+
+  <main>
+    <div class="board-shell"><div class="board" id="board"></div></div>
+    <div class="status" id="status"></div>
+  </main>
+
+  <div class="modal" id="questionModal" aria-hidden="true">
+    <div class="question-card">
+      <div class="question-meta" id="questionMeta"></div>
+      <div class="question-content" id="questionContent"></div>
+      <div class="answer-box" id="answerBox"></div>
+      <div class="modal-actions">
+        <button class="btn-primary" id="showAnswerBtn">Show Answer</button>
+        <button class="btn-secondary" id="closeQuestionBtn">Return to Board</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="editorModal" aria-hidden="true">
+    <div class="editor-panel">
+      <h2>Edit Game</h2>
+
+      <div class="editor-top">
+        <div class="field">
+          <label for="titleInput">Game title</label>
+          <input id="titleInput" type="text">
+        </div>
+        <div class="field">
+          <label for="categoryInput">Selected category name</label>
+          <input id="categoryInput" type="text">
+        </div>
+      </div>
+
+      <div class="tabs" id="categoryTabs"></div>
+
+      <div class="editor-grid" id="editorGrid">
+        <div class="head">Value</div>
+        <div class="head">Media Before Question</div>
+        <div class="head">Question Text</div>
+        <div class="head">Media After Question</div>
+        <div class="head">Text Answer</div>
+      </div>
+
+      <div class="help">
+        Each clue can follow: <strong>media → question → media → answer</strong>.
+        Both media fields are optional, so a clue can also be question → answer, media → question → answer,
+        or question → media → answer.<br><br>
+        Supported media: YouTube, MP4 video, MP3 audio, and images.
+        For files uploaded to GitHub, use paths such as <code>media/intro.mp3</code>,
+        <code>media/clip.mp4</code>, or <code>media/photo.jpg</code>.
+      </div>
+
+      <div class="editor-actions">
+        <button class="btn-danger" id="cancelEditBtn">Cancel</button>
+        <button class="btn-primary" id="saveEditBtn">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const VALUES = [100,200,300,400,500];
+  const DEFAULT_CATEGORIES = ["Rylan","Morgan","Lindsey","Rob","Jessica","Gabe"];
+
+  const DATA_KEY = "familyJeopardyDualMediaDataV5";
+  const V4_KEY = "familyJeopardyOptionalMediaDataV4";
+  const V3_KEY = "familyJeopardyQuestionMediaDataV3";
+  const V2_KEY = "familyJeopardyMediaDataV2";
+  const V1_KEY = "familyJeopardyDataV1";
+  const PLAYED_KEY = "familyJeopardyPlayedV1";
+
+  const MEDIA_TYPES = ["none","video","audio","image"];
+
+  function makeDefaultData(){
+    return {
+      title:"Family Jeopardy",
+      categories:DEFAULT_CATEGORIES.map(name => ({
+        name,
+        clues:VALUES.map(value => ({
+          value,
+          introMediaType:"none",
+          introMediaSource:"",
+          questionText:`Enter the ${name} $${value} question here.`,
+          followMediaType:"none",
+          followMediaSource:"",
+          answerText:`Enter the ${name} $${value} answer here.`
+        }))
+      }))
+    };
+  }
+
+  function safeMediaType(value){
+    return MEDIA_TYPES.includes(value) ? value : "none";
+  }
+
+  function normalizeClue(clue, clueIndex){
+    let introMediaType = safeMediaType(clue.introMediaType);
+    let introMediaSource = clue.introMediaSource ?? "";
+    let questionText = clue.questionText;
+    let followMediaType = safeMediaType(clue.followMediaType);
+    let followMediaSource = clue.followMediaSource ?? "";
+    let answerText = clue.answerText;
+
+    // Migrate V4: its single media field came after the question.
+    if(questionText !== undefined && clue.mediaType !== undefined && clue.followMediaType === undefined){
+      followMediaType = safeMediaType(clue.mediaType);
+      followMediaSource = clue.mediaSource ?? "";
+    }
+
+    // Migrate V3.
+    if(questionText === undefined && clue.questionType !== undefined){
+      if(clue.questionType === "video" || clue.questionType === "audio"){
+        questionText = clue.question ?? "";
+        followMediaType = clue.questionType;
+        followMediaSource = clue.questionSource ?? "";
+      }else{
+        questionText = clue.questionSource ?? clue.question ?? "";
+      }
+      answerText = answerText ?? clue.answer ?? "";
+    }
+
+    // Migrate V2.
+    if(questionText === undefined && clue.answerType !== undefined){
+      questionText = clue.question ?? "";
+      if(clue.answerType === "video" || clue.answerType === "audio"){
+        followMediaType = clue.answerType;
+        followMediaSource = clue.answerSource ?? "";
+        answerText = answerText ?? "";
+      }else{
+        answerText = answerText ?? clue.answerSource ?? clue.answer ?? "";
+      }
+    }
+
+    // Migrate V1.
+    if(questionText === undefined){
+      questionText = clue.question ?? "";
+      answerText = answerText ?? clue.answer ?? "";
+    }
+
+    return {
+      value:VALUES[clueIndex],
+      introMediaType,
+      introMediaSource:String(introMediaSource ?? ""),
+      questionText:String(questionText ?? ""),
+      followMediaType,
+      followMediaSource:String(followMediaSource ?? ""),
+      answerText:String(answerText ?? "")
+    };
+  }
+
+  function validateData(data){
+    if(!data || !Array.isArray(data.categories) || data.categories.length !== 6){
+      throw new Error("Game data must contain exactly 6 categories.");
+    }
+
+    return {
+      title:String(data.title || "Family Jeopardy"),
+      categories:data.categories.map((category, categoryIndex) => {
+        if(!Array.isArray(category.clues) || category.clues.length < VALUES.length){
+          throw new Error(`Category ${categoryIndex + 1} must contain at least 5 clues.`);
+        }
+        return {
+          name:String(category.name || `Category ${categoryIndex + 1}`),
+          clues:category.clues.slice(0, VALUES.length).map(normalizeClue)
+        };
+      })
+    };
+  }
+
+  function loadData(){
+    for(const key of [DATA_KEY,V4_KEY,V3_KEY,V2_KEY,V1_KEY]){
+      try{
+        const saved = localStorage.getItem(key);
+        if(saved) return validateData(JSON.parse(saved));
+      }catch(error){}
+    }
+    return makeDefaultData();
+  }
+
+  function loadPlayed(){
+    try{
+      const saved = JSON.parse(localStorage.getItem(PLAYED_KEY) || "{}");
+      return saved && typeof saved === "object" ? saved : {};
+    }catch(error){
+      return {};
+    }
+  }
+
+  let gameData = loadData();
+  let played = loadPlayed();
+  let selectedCategory = 0;
+  let editorDraft = null;
+  let currentClue = null;
+
+  played = Object.fromEntries(
+    Object.entries(played).filter(([key,value]) => {
+      const [categoryIndex,clueIndex] = key.split("-").map(Number);
+      return Boolean(value) &&
+        categoryIndex >= 0 && categoryIndex < 6 &&
+        clueIndex >= 0 && clueIndex < VALUES.length;
+    })
+  );
+
+  const byId = id => document.getElementById(id);
+  const board = byId("board");
+  const gameTitle = byId("gameTitle");
+  const status = byId("status");
+  const questionModal = byId("questionModal");
+  const questionMeta = byId("questionMeta");
+  const questionContent = byId("questionContent");
+  const answerBox = byId("answerBox");
+  const showAnswerBtn = byId("showAnswerBtn");
+  const editorModal = byId("editorModal");
+  const titleInput = byId("titleInput");
+  const categoryInput = byId("categoryInput");
+  const categoryTabs = byId("categoryTabs");
+  const editorGrid = byId("editorGrid");
+
+  function saveAll(){
+    localStorage.setItem(DATA_KEY,JSON.stringify(gameData));
+    localStorage.setItem(PLAYED_KEY,JSON.stringify(played));
+  }
+
+  function tileKey(categoryIndex,clueIndex){
+    return `${categoryIndex}-${clueIndex}`;
+  }
+
+  function renderBoard(){
+    gameTitle.textContent = gameData.title;
+    document.title = gameData.title;
+    board.innerHTML = "";
+
+    gameData.categories.forEach(category => {
+      const header = document.createElement("div");
+      header.className = "category";
+      header.textContent = category.name;
+      board.appendChild(header);
+    });
+
+    VALUES.forEach((value,clueIndex) => {
+      gameData.categories.forEach((category,categoryIndex) => {
+        const key = tileKey(categoryIndex,clueIndex);
+        const button = document.createElement("button");
+        button.className = "tile" + (played[key] ? " played" : "");
+        button.disabled = Boolean(played[key]);
+        button.setAttribute("aria-label",`${category.name} for $${value}`);
+        button.innerHTML = `<span class="money">$${value}</span>`;
+        button.addEventListener("click",() => openQuestion(categoryIndex,clueIndex));
+        board.appendChild(button);
+      });
+    });
+
+    const playedCount = Object.keys(played).filter(key => played[key]).length;
+    status.textContent = `${playedCount} of 30 questions played`;
+  }
+
+  function youtubeEmbedUrl(source){
+    try{
+      const url = new URL(source,window.location.href);
+
+      if(url.hostname.includes("youtu.be")){
+        const id = url.pathname.split("/").filter(Boolean)[0];
+        return id ? `https://www.youtube.com/embed/${id}` : null;
+      }
+
+      if(url.hostname.includes("youtube.com")){
+        if(url.pathname === "/watch"){
+          const id = url.searchParams.get("v");
+          return id ? `https://www.youtube.com/embed/${id}` : null;
+        }
+
+        const parts = url.pathname.split("/").filter(Boolean);
+        if(["embed","shorts","live"].includes(parts[0]) && parts[1]){
+          return `https://www.youtube.com/embed/${parts[1]}`;
+        }
+      }
+    }catch(error){}
+
+    return null;
+  }
+
+  function stopMedia(){
+    questionContent.querySelectorAll("audio,video").forEach(media => {
+      try{
+        media.pause();
+        media.currentTime = 0;
+      }catch(error){}
+    });
+
+    questionContent.querySelectorAll("iframe").forEach(frame => {
+      frame.src = "about:blank";
+    });
+
+    questionContent.innerHTML = "";
+  }
+
+  function makeMediaSection(type,source,labelText){
+    if(type === "none" || !source.trim()) return null;
+
+    const section = document.createElement("div");
+    section.className = "media-section";
+
+    const label = document.createElement("div");
+    label.className = "section-label";
+    label.textContent = labelText;
+    section.appendChild(label);
+
+    const cleanSource = source.trim();
+
+    if(type === "video"){
+      const youtube = youtubeEmbedUrl(cleanSource);
+
+      if(youtube){
+        const frame = document.createElement("iframe");
+        frame.src = youtube + "?rel=0";
+        frame.title = labelText;
+        frame.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+        frame.allowFullscreen = true;
+        section.appendChild(frame);
+      }else{
+        const video = document.createElement("video");
+        video.controls = true;
+        video.playsInline = true;
+        video.preload = "metadata";
+        video.src = cleanSource;
+        section.appendChild(video);
+      }
+    }else if(type === "audio"){
+      const audio = document.createElement("audio");
+      audio.controls = true;
+      audio.preload = "metadata";
+      audio.src = cleanSource;
+      section.appendChild(audio);
+    }else if(type === "image"){
+      const image = document.createElement("img");
+      image.src = cleanSource;
+      image.alt = labelText;
+      section.appendChild(image);
+    }
+
+    if(type === "video" || type === "audio"){
+      const note = document.createElement("div");
+      note.className = "media-note";
+      note.textContent = "Press Play when you are ready.";
+      section.appendChild(note);
+    }
+
+    return section;
+  }
+
+  function renderQuestion(clue){
+    stopMedia();
+
+    const intro = makeMediaSection(
+      clue.introMediaType,
+      clue.introMediaSource,
+      "Media Before Question"
+    );
+    if(intro) questionContent.appendChild(intro);
+
+    const questionLabel = document.createElement("div");
+    questionLabel.className = "section-label";
+    questionLabel.textContent = "Question";
+    questionContent.appendChild(questionLabel);
+
+    const question = document.createElement("div");
+    question.className = "question-copy";
+    question.textContent = clue.questionText.trim() || "(No question entered)";
+    questionContent.appendChild(question);
+
+    const follow = makeMediaSection(
+      clue.followMediaType,
+      clue.followMediaSource,
+      "Media After Question"
+    );
+    if(follow) questionContent.appendChild(follow);
+  }
+
+  function openQuestion(categoryIndex,clueIndex){
+    const clue = gameData.categories[categoryIndex].clues[clueIndex];
+    played[tileKey(categoryIndex,clueIndex)] = true;
+    currentClue = clue;
+
+    saveAll();
+    renderBoard();
+
+    questionMeta.textContent =
+      `${gameData.categories[categoryIndex].name} — $${clue.value}`;
+    renderQuestion(clue);
+
+    answerBox.innerHTML = "";
+    answerBox.classList.remove("show");
+    showAnswerBtn.textContent = "Show Answer";
+
+    questionModal.classList.add("open");
+    questionModal.setAttribute("aria-hidden","false");
+  }
+
+  function closeQuestion(){
+    stopMedia();
+    answerBox.innerHTML = "";
+    answerBox.classList.remove("show");
+    questionModal.classList.remove("open");
+    questionModal.setAttribute("aria-hidden","true");
+    currentClue = null;
+  }
+
+  showAnswerBtn.addEventListener("click",() => {
+    const showing = answerBox.classList.toggle("show");
+
+    if(showing){
+      answerBox.innerHTML = "";
+
+      const label = document.createElement("div");
+      label.className = "section-label";
+      label.textContent = "Answer";
+
+      const answer = document.createElement("div");
+      answer.className = "answer-copy";
+      answer.textContent = currentClue?.answerText.trim()
+        ? currentClue.answerText
+        : "No answer entered.";
+
+      answerBox.append(label,answer);
+      showAnswerBtn.textContent = "Hide Answer";
+    }else{
+      answerBox.innerHTML = "";
+      showAnswerBtn.textContent = "Show Answer";
+    }
+  });
+
+  byId("closeQuestionBtn").addEventListener("click",closeQuestion);
+
+  byId("resetBtn").addEventListener("click",() => {
+    if(confirm("Reset all played tiles so the full board is available again?")){
+      played = {};
+      saveAll();
+      renderBoard();
+    }
+  });
+
+  byId("fullscreenBtn").addEventListener("click",async () => {
+    try{
+      if(!document.fullscreenElement){
+        await document.documentElement.requestFullscreen();
+      }else{
+        await document.exitFullscreen();
+      }
+    }catch(error){
+      alert("Full-screen mode is not available in this browser.");
+    }
+  });
+
+  function openEditor(){
+    editorDraft = JSON.parse(JSON.stringify(gameData));
+    selectedCategory = 0;
+    renderEditor();
+    editorModal.classList.add("open");
+    editorModal.setAttribute("aria-hidden","false");
+  }
+
+  function closeEditor(){
+    editorModal.classList.remove("open");
+    editorModal.setAttribute("aria-hidden","true");
+    editorDraft = null;
+  }
+
+  function syncCurrentEditorFields(){
+    if(!editorDraft) return;
+
+    editorDraft.title = titleInput.value.trim() || "Family Jeopardy";
+    editorDraft.categories[selectedCategory].name =
+      categoryInput.value.trim() || `Category ${selectedCategory + 1}`;
+
+    VALUES.forEach((value,clueIndex) => {
+      const clue = editorDraft.categories[selectedCategory].clues[clueIndex];
+
+      clue.introMediaType = byId(`intro-type-${clueIndex}`).value;
+      clue.introMediaSource = byId(`intro-source-${clueIndex}`).value;
+      clue.questionText = byId(`question-${clueIndex}`).value;
+      clue.followMediaType = byId(`follow-type-${clueIndex}`).value;
+      clue.followMediaSource = byId(`follow-source-${clueIndex}`).value;
+      clue.answerText = byId(`answer-${clueIndex}`).value;
+    });
+  }
+
+  function mediaPlaceholder(type){
+    if(type === "video") return "YouTube URL, direct MP4 URL, or media/video.mp4";
+    if(type === "audio") return "Direct MP3 URL or media/audio.mp3";
+    if(type === "image") return "Image URL or media/photo.jpg";
+    return "No media needed";
+  }
+
+  function buildMediaEditor(prefix,clueIndex,typeValue,sourceValue,helpText){
+    const wrapper = document.createElement("div");
+    wrapper.className = prefix === "intro" ? "intro-cell" : "follow-cell";
+
+    const controls = document.createElement("div");
+    controls.className = "media-controls";
+
+    const type = document.createElement("select");
+    type.id = `${prefix}-type-${clueIndex}`;
+
+    [
+      ["none","No media"],
+      ["video","Video"],
+      ["audio","Audio / MP3"],
+      ["image","Image"]
+    ].forEach(([value,label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      option.selected = typeValue === value;
+      type.appendChild(option);
+    });
+
+    const source = document.createElement("input");
+    source.type = "text";
+    source.id = `${prefix}-source-${clueIndex}`;
+    source.value = sourceValue;
+    source.placeholder = mediaPlaceholder(typeValue);
+    source.disabled = typeValue === "none";
+
+    controls.append(type,source);
+    wrapper.appendChild(controls);
+
+    const help = document.createElement("div");
+    help.className = "editor-help";
+    help.textContent = typeValue === "none"
+      ? "This stage will be skipped."
+      : helpText;
+    wrapper.appendChild(help);
+
+    type.addEventListener("change",() => {
+      source.disabled = type.value === "none";
+      source.placeholder = mediaPlaceholder(type.value);
+      help.textContent = type.value === "none"
+        ? "This stage will be skipped."
+        : helpText;
+    });
+
+    return wrapper;
+  }
+
+  function renderEditor(){
+    titleInput.value = editorDraft.title;
+    categoryInput.value = editorDraft.categories[selectedCategory].name;
+
+    categoryTabs.innerHTML = "";
+    editorDraft.categories.forEach((category,categoryIndex) => {
+      const button = document.createElement("button");
+      button.className =
+        "tab" + (categoryIndex === selectedCategory ? " active" : "");
+      button.textContent = category.name || `Category ${categoryIndex + 1}`;
+
+      button.addEventListener("click",() => {
+        syncCurrentEditorFields();
+        selectedCategory = categoryIndex;
+        renderEditor();
+      });
+
+      categoryTabs.appendChild(button);
+    });
+
+    editorGrid.innerHTML = `
+      <div class="head">Value</div>
+      <div class="head">Media Before Question</div>
+      <div class="head">Question Text</div>
+      <div class="head">Media After Question</div>
+      <div class="head">Text Answer</div>`;
+
+    editorDraft.categories[selectedCategory].clues.forEach((clue,clueIndex) => {
+      const value = document.createElement("div");
+      value.className = "value-label";
+      value.textContent = `$${clue.value}`;
+
+      const intro = buildMediaEditor(
+        "intro",
+        clueIndex,
+        clue.introMediaType,
+        clue.introMediaSource,
+        "This media appears before the written question."
+      );
+
+      const questionWrap = document.createElement("div");
+      questionWrap.className = "question-cell";
+
+      const question = document.createElement("textarea");
+      question.id = `question-${clueIndex}`;
+      question.value = clue.questionText;
+      question.placeholder = "Type the written question or clue";
+      questionWrap.appendChild(question);
+
+      const questionHelp = document.createElement("div");
+      questionHelp.className = "editor-help";
+      questionHelp.textContent = "The question appears between the two optional media stages.";
+      questionWrap.appendChild(questionHelp);
+
+      const follow = buildMediaEditor(
+        "follow",
+        clueIndex,
+        clue.followMediaType,
+        clue.followMediaSource,
+        "This media appears after the written question."
+      );
+
+      const answerWrap = document.createElement("div");
+      answerWrap.className = "answer-cell";
+
+      const answer = document.createElement("textarea");
+      answer.id = `answer-${clueIndex}`;
+      answer.value = clue.answerText;
+      answer.placeholder = "Type the correct answer";
+      answerWrap.appendChild(answer);
+
+      const answerHelp = document.createElement("div");
+      answerHelp.className = "editor-help";
+      answerHelp.textContent = "The answer stays hidden until Show Answer is selected.";
+      answerWrap.appendChild(answerHelp);
+
+      editorGrid.append(value,intro,questionWrap,follow,answerWrap);
+    });
+  }
+
+  byId("editBtn").addEventListener("click",openEditor);
+  byId("cancelEditBtn").addEventListener("click",closeEditor);
+
+  byId("saveEditBtn").addEventListener("click",() => {
+    syncCurrentEditorFields();
+    gameData = validateData(editorDraft);
+    saveAll();
+    closeEditor();
+    renderBoard();
+  });
+
+  byId("exportBtn").addEventListener("click",() => {
+    const blob = new Blob(
+      [JSON.stringify(gameData,null,2)],
+      {type:"application/json"}
+    );
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "family-jeopardy-dual-media-data.json";
+    link.click();
+    URL.revokeObjectURL(url);
+  });
+
+  byId("importFile").addEventListener("change",async event => {
+    const file = event.target.files[0];
+    if(!file) return;
+
+    try{
+      gameData = validateData(JSON.parse(await file.text()));
+      played = {};
+      saveAll();
+      renderBoard();
+      alert("Game data imported successfully.");
+    }catch(error){
+      alert(`Could not import the game data: ${error.message}`);
+    }finally{
+      event.target.value = "";
+    }
+  });
+
+  document.addEventListener("keydown",event => {
+    if(event.key === "Escape"){
+      if(questionModal.classList.contains("open")){
+        closeQuestion();
+      }else if(editorModal.classList.contains("open")){
+        closeEditor();
+      }
+    }
+  });
+
+  saveAll();
+  renderBoard();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+Place MP3, MP4, and image files in this folder.
+Examples:
+media/intro.mp3
+media/follow-up.mp4
+media/photo.jpg
