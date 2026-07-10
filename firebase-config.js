@@ -1,6 +1,7 @@
 const firebaseConfig = {
   apiKey: "AIzaSyClGQiofKzvGaM5Z30oVhq9ysT0VrGRzaQ",
   authDomain: "family-jeopardy-33dc9.firebaseapp.com",
+  databaseURL: "https://family-jeopardy-33dc9-default-rtdb.firebaseio.com",
   projectId: "family-jeopardy-33dc9",
   storageBucket: "family-jeopardy-33dc9.firebasestorage.app",
   messagingSenderId: "981923161817",
