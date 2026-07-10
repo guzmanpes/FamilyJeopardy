@@ -313,7 +313,12 @@
     line-height:1.3;
   }
 
+
+.live-bar{display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;padding:10px 16px;background:#ffd84d;color:#111;font-weight:800}.live-bar[hidden]{display:none}.responses-panel{width:min(1300px,98vw);max-height:94vh;overflow:auto;background:#f4f6ff;color:#111;border-radius:14px;padding:20px}.responses-header{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap}.responses-header h2{margin:0 0 5px}.responses-actions{display:flex;gap:8px;flex-wrap:wrap}.responses-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:18px}.response-card{background:#fff;border:2px solid #0a2bb0;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.12)}.response-name{padding:10px 12px;background:#0a2bb0;color:#fff;font-weight:900}.response-card img{display:block;width:100%;height:220px;object-fit:contain;background:#fff}.response-time{padding:7px 10px;font-size:.75rem;color:#5b6380}.empty-responses{grid-column:1/-1;padding:40px;text-align:center;color:#5b6380;font-weight:700}
 </style>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
 </head>
 <body>
   <div class="topbar">
@@ -322,6 +327,8 @@
       <div class="subtitle">Optional media → question → optional media → text answer, with YouTube start/end times</div>
     </div>
     <div class="controls">
+      <button class="btn-primary" id="liveSessionBtn">Start Live Players</button>
+      <button class="btn-secondary" id="responsesBtn">Player Responses</button>
       <button class="btn-secondary" id="fullscreenBtn">Full Screen</button>
       <button class="btn-secondary" id="editBtn">Edit Questions</button>
       <button class="btn-secondary" id="exportBtn">Export Game Data</button>
@@ -329,6 +336,7 @@
       <button class="btn-danger" id="resetBtn">Reset Played Tiles</button>
     </div>
   </div>
+<div id="liveBar" class="live-bar" hidden><strong>Session: <span id="sessionCodeText"></span></strong><strong>Players: <span id="playerCount">0</span></strong><button class="btn-secondary" id="copyPlayerLinkBtn">Copy Player Link</button><button class="btn-danger" id="endSessionBtn">End Session</button></div>
 
   <main>
     <div class="board-shell"><div class="board" id="board"></div></div>
@@ -347,6 +355,8 @@
     </div>
   </div>
 
+
+  <div class="modal" id="responsesModal" aria-hidden="true"><div class="responses-panel"><div class="responses-header"><div><h2>Player Responses</h2><div id="responseQuestionLabel">Open a clue to collect responses.</div></div><div class="responses-actions"><button class="btn-danger" id="clearResponsesBtn">Clear Responses</button><button class="btn-secondary" id="closeResponsesBtn">Close</button></div></div><div id="responsesGrid" class="responses-grid"><div class="empty-responses">No responses submitted yet.</div></div></div></div>
   <div class="modal" id="editorModal" aria-hidden="true">
     <div class="editor-panel">
       <h2>Edit Game</h2>
@@ -789,6 +799,8 @@
     played[tileKey(categoryIndex,clueIndex)] = true;
     currentClue = clue;
 
+    if(liveSessionRef){ publishCurrentClue(categoryIndex,clueIndex,clue); }
+
     saveAll();
     renderBoard();
 
@@ -1139,6 +1151,25 @@
       }
     }
   });
+
+
+  let liveDb=null,liveSessionCode="",liveSessionRef=null,responseListenerRef=null,playersListenerRef=null,currentLivePrompt="",liveResponses={};
+  function firebaseReady(){return window.FIREBASE_CONFIG&&window.FIREBASE_CONFIG.apiKey&&!String(window.FIREBASE_CONFIG.apiKey).includes("PASTE_")}
+  function initLiveDatabase(){if(liveDb)return true;if(!firebaseReady()){alert("Firebase is not configured. Add your Firebase web configuration to firebase-config.js.");return false}if(!firebase.apps.length)firebase.initializeApp(window.FIREBASE_CONFIG);liveDb=firebase.database();return true}
+  function randomSessionCode(){const chars="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";let code="";for(let i=0;i<6;i++)code+=chars[Math.floor(Math.random()*chars.length)];return code}
+  function playerPageUrl(){const u=new URL("player.html",location.href);u.searchParams.set("session",liveSessionCode);return u.toString()}
+  async function startLiveSession(){if(!initLiveDatabase())return;liveSessionCode=randomSessionCode();liveSessionRef=liveDb.ref(`sessions/${liveSessionCode}`);await liveSessionRef.set({active:true,createdAt:firebase.database.ServerValue.TIMESTAMP,currentClue:null});byId("sessionCodeText").textContent=liveSessionCode;byId("liveBar").hidden=false;byId("liveSessionBtn").textContent="Live Players Active";attachLiveListeners();alert(`Session ${liveSessionCode} is ready. Copy the Player Link and send it to players.`)}
+  function attachLiveListeners(){responseListenerRef=liveSessionRef.child("responses");responseListenerRef.on("value",s=>{liveResponses=s.val()||{};renderResponses()});playersListenerRef=liveSessionRef.child("players");playersListenerRef.on("value",s=>byId("playerCount").textContent=s.numChildren())}
+  async function endLiveSession(){if(!liveSessionRef)return;if(!confirm("End this live player session?"))return;await liveSessionRef.update({active:false});responseListenerRef?.off();playersListenerRef?.off();liveSessionRef=null;liveSessionCode="";liveResponses={};byId("liveBar").hidden=true;byId("liveSessionBtn").textContent="Start Live Players";renderResponses()}
+  async function publishCurrentClue(categoryIndex,clueIndex,clue){if(!liveSessionRef)return;const clueId=`${categoryIndex}-${clueIndex}-${Date.now()}`;currentLivePrompt=clue.questionText||"Draw or write your response.";await liveSessionRef.update({currentClue:{id:clueId,category:gameData.categories[categoryIndex].name,value:clue.value,prompt:currentLivePrompt,openedAt:firebase.database.ServerValue.TIMESTAMP},responses:null});liveResponses={};renderResponses()}
+  function renderResponses(){const grid=byId("responsesGrid"),label=byId("responseQuestionLabel");if(!grid||!label)return;label.textContent=currentLivePrompt||"Open a clue to collect responses.";grid.innerHTML="";const entries=Object.values(liveResponses||{}).sort((a,b)=>(a.submittedAt||0)-(b.submittedAt||0));if(!entries.length){grid.innerHTML='<div class="empty-responses">No responses submitted yet.</div>';return}for(const r of entries){const card=document.createElement("div");card.className="response-card";const name=document.createElement("div");name.className="response-name";name.textContent=r.playerName||"Player";const img=document.createElement("img");img.src=r.imageData||"";img.alt=`${r.playerName||"Player"} response`;const time=document.createElement("div");time.className="response-time";time.textContent="Submitted";card.append(name,img,time);grid.appendChild(card)}}
+  async function clearLiveResponses(){if(liveSessionRef)await liveSessionRef.child("responses").remove()}
+  byId("liveSessionBtn").addEventListener("click",()=>liveSessionRef?alert(`Session ${liveSessionCode} is active.`):startLiveSession());
+  byId("responsesBtn").addEventListener("click",()=>{byId("responsesModal").classList.add("open");renderResponses()});
+  byId("closeResponsesBtn").addEventListener("click",()=>byId("responsesModal").classList.remove("open"));
+  byId("clearResponsesBtn").addEventListener("click",clearLiveResponses);
+  byId("copyPlayerLinkBtn").addEventListener("click",async()=>{const link=playerPageUrl();try{await navigator.clipboard.writeText(link);alert("Player link copied.")}catch(e){prompt("Copy this player link:",link)}});
+  byId("endSessionBtn").addEventListener("click",endLiveSession);
 
   saveAll();
   renderBoard();
